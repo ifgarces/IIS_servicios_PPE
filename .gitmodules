@@ -1,0 +1,3 @@
+[submodule "IIS_servicios_common"]
+	path = IIS_servicios_common
+	url = https://github.com/ifgarces/IIS_servicios_common
