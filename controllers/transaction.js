@@ -9,14 +9,6 @@ const pool = new Pool({
 	port: process.env.PGPORT,
 });
 
-// const pool = new Pool({
-//     user: "desarrollogrupo3",
-//     host: "grupo3-servicios.cxi5sdqvpga8.us-east-1.rds.amazonaws.com",
-//     database: "postgres",
-//     password: "QTBYUMWJ2aNcHt2",
-//     port: 5432
-// });
-
 const ppePaymentRequest = (req, res = response) => {
 	const { persona_id, nro_repertorio, monto } = req.body;
 
@@ -45,4 +37,22 @@ const ppeRefundRequest = (req, res = response) => {
 	});
 };
 
-module.exports = { ppePaymentRequest, ppeRefundRequest };
+const ppePaymentConfirmation = (req, res = response) => {
+	const nro_repertorio = req.query.nro_repertorio;
+
+	if (!nro_repertorio) {
+		res.status(401).json({
+			msg: 'Es necesario el numero de repertorio.',
+		});
+	}
+	//TODO
+	res.status(200).json({
+		msg: `Estado de la solicitud TODO`,
+	});
+};
+
+module.exports = {
+	ppePaymentRequest,
+	ppeRefundRequest,
+	ppePaymentConfirmation,
+};
