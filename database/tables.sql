@@ -13,9 +13,9 @@ CREATE TABLE TransaccionTGR(
     numero_repertorio      varchar(12) NOT NULL,   
     timestamp_recepcion    timestamp,
     monto                  decimal NOT NULL,
-    estado_transaccion     varchar(10),
+    estado_transaccion     varchar(10) NOT NULL CHECK (estado_transaccion IN ('ingresado','aceptado','rechazado')),
     fecha_aprobacion       timestamp,
-    ingreso                boolean,
-    estado_TGR             varchar(15),
+    ingreso                boolean NOT NULL,
+    estado_TGR             varchar(15) NOT NULL CHECK (estado_TGR IN ('esperando','aceptado','fallido')),
 	    PRIMARY KEY (folio)
 );
