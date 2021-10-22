@@ -30,7 +30,7 @@ const ppePaymentRequest = (req, res = response) => {
 	} else {
 		pool
 			.query(
-				'INSERT INTO TransaccionTGR (folio,id_persona,numero_repertorio,timestamp_recepcion,monto,estado_transaccion,fecha_aprobacion,ingreso,estado_TGR) VALUES (cast((SELECT folio FROM TransaccionTGR ORDER BY folio DESC LIMIT 1) as INT)+1,$1,$2,$3,true)',
+				"INSERT INTO TransaccionTGR (folio,id_persona,numero_repertorio,timestamp_recepcion,monto,estado_transaccion,fecha_aprobacion,ingreso,estado_TGR) VALUES (cast((SELECT folio FROM TransaccionTGR ORDER BY folio DESC LIMIT 1) as INT)+1,$1,$2,$3,$4,$5,$6,$7,$8)",
 				[
 					id_persona,
 					numero_repertorio,
@@ -39,7 +39,7 @@ const ppePaymentRequest = (req, res = response) => {
 					'ingresado',
 					null,
 					true,
-					'esperando',
+					'esperando'
 				],
 			)
 			.then((results) => {
@@ -51,7 +51,7 @@ const ppePaymentRequest = (req, res = response) => {
 			.catch((error) => {
 				console.error(`Error on ppePaymentRequest call: ${error}`);
 				res.status(500).json({
-					msg: 'Internal Server Error',
+					msg: `Internal Server Error ${error}`,
 				});
 			});
 	}
