@@ -25,7 +25,7 @@ const ppePaymentRequest = (req, res = response) => {
 
 	if (!id_persona || !numero_repertorio || !monto) {
 		res.status(418).json({
-			msg: 'Missing data in the request body (persona_id , nro_repertorio, monto).',
+			msg: 'Missing data in the request body (id_persona , numero_repertorio, monto).',
 		});
 	} else {
 		pool
