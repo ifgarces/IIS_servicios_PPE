@@ -9,18 +9,52 @@ const pool = new Pool({
 	port: process.env.PGPORT,
 });
 
-const ppePaymentRequest = (req, res = response) => {
-	const { persona_id, nro_repertorio, monto } = req.body;
+/**
+ * Source: https://gist.github.com/jczaplew/f055788bf851d0840f50#gistcomment-3237674
+ * @returns {string} The current server datetime, converted to SQL timestamp format.
+ */
+function getCurrentServerTimestamp() {
+	return new Date(Date.now() + 1000 * 60 * -new Date().getTimezoneOffset())
+		.toISOString()
+		.replace('T', ' ')
+		.replace('Z', '');
+}
 
-	if (!persona_id || !nro_repertorio || !monto) {
+const ppePaymentRequest = (req, res = response) => {
+	const { id_persona, numero_repertorio, monto } = req.body;
+
+	if (!id_persona || !numero_repertorio || !monto) {
 		res.status(418).json({
 			msg: 'Missing data in the request body (persona_id , nro_repertorio, monto).',
 		});
+	} else {
+		pool
+			.query(
+				'INSERT INTO TransaccionTGR (folio,id_persona,numero_repertorio,timestamp_recepcion,monto,estado_transaccion,fecha_aprobacion,ingreso,estado_TGR) VALUES (cast((SELECT folio FROM TransaccionTGR ORDER BY folio DESC LIMIT 1) as INT)+1,$1,$2,$3,true)',
+				[
+					id_persona,
+					numero_repertorio,
+					getCurrentServerTimestamp(),
+					monto,
+					'ingresado',
+					null,
+					true,
+					'esperando',
+				],
+			)
+			.then((results) => {
+				console.log('Monto Ingresado');
+				res.status(200).json({
+					msg: 'Pago Ingresado',
+				});
+			})
+			.catch((error) => {
+				console.error(`Error on ppePaymentRequest call: ${error}`);
+				res.status(500).json({
+					msg: 'Internal Server Error',
+				});
+			});
 	}
-	//TODO
-	res.status(200).json({
-		msg: `Payment state TODO`,
-	});
 };
 
 const ppeRefundRequest = (req, res = response) => {
