@@ -1,5 +1,6 @@
 const { response } = require('express');
 const Pool = require('pg').Pool;
+require("log-timestamp");
 
 const pool = new Pool({
 	user: process.env.PGUSER,
@@ -43,13 +44,13 @@ const ppePaymentRequest = (req, res = response) => {
 				],
 			)
 			.then((results) => {
-				console.log('Monto Ingresado');
+				console.log('[ppePaymentRequest] Monto Ingresado');
 				res.status(200).json({
 					msg: 'Pago Ingresado',
 				});
 			})
 			.catch((error) => {
-				console.error(`Error on ppePaymentRequest call: ${error}`);
+				console.error(`[ppePaymentRequest] Error for request ${req}: ${error}`);
 				res.status(500).json({
 					msg: `Internal Server Error ${error}`,
 				});
