@@ -11,6 +11,6 @@ const router = Router();
 router.post('/payment', ppePaymentRequest);
 router.post('/refund', ppeRefundRequest);
 //GET
-router.get('/confirmation', ppePaymentConfirmation);
+router.post('/confirmation', ppePaymentConfirmation);
 
 module.exports = router;

@@ -1,6 +1,6 @@
 const { response } = require('express');
 const Pool = require('pg').Pool;
-require("log-timestamp");
+require('log-timestamp');
 
 const pool = new Pool({
 	user: process.env.PGUSER,
@@ -31,7 +31,7 @@ const ppePaymentRequest = (req, res = response) => {
 	} else {
 		pool
 			.query(
-				"INSERT INTO TransaccionTGR (folio,id_persona,numero_repertorio,timestamp_recepcion,monto,estado_transaccion,fecha_aprobacion,ingreso,estado_TGR) VALUES (cast((SELECT folio FROM TransaccionTGR ORDER BY folio DESC LIMIT 1) as INT)+1,$1,$2,$3,$4,$5,$6,$7,$8)",
+				'INSERT INTO TransaccionTGR (folio,id_persona,numero_repertorio,timestamp_recepcion,monto,estado_transaccion,fecha_aprobacion,ingreso,estado_TGR) VALUES (cast((SELECT folio FROM TransaccionTGR ORDER BY folio DESC LIMIT 1) as INT)+1,$1,$2,$3,$4,$5,$6,$7,$8)',
 				[
 					id_persona,
 					numero_repertorio,
@@ -40,7 +40,7 @@ const ppePaymentRequest = (req, res = response) => {
 					'ingresado',
 					null,
 					true,
-					'esperando'
+					'esperando',
 				],
 			)
 			.then((results) => {
@@ -58,6 +58,40 @@ const ppePaymentRequest = (req, res = response) => {
 	}
 };
 
+const ppePaymentConfirmation = (req, res = response) => {
+	const nro_repertorio = req.body.nro_repertorio;
+
+	if (!nro_repertorio) {
+		res.status(401).json({
+			msg: 'Es necesario el numero de repertorio.',
+		});
+	} else {
+		pool
+			.query(
+				`SELECT estado_TGR FROM TransaccionTGR WHERE numero_repertorio = $1`,
+				[nro_repertorio],
+			)
+			.then((results) => {
+				if (results.rowCount == 0) {
+					// transaccion no existe
+					console.log(
+						`[ppePaymentConfirmation] POST ---  transaccion NO existe`,
+					);
+					res.status(200).json({
+						valid: false,
+					});
+					return;
+				}
+				console.log(`[licensePlateCheck] POST --- Vehiculo SI existe`);
+				let status = results.rows[0];
+				res.status(200).json({
+					valid: true,
+					msg: status,
+				});
+			});
+	}
+};
+
 const ppeRefundRequest = (req, res = response) => {
 	const { persona_id, nro_repertorio, monto } = req.body;
 
@@ -69,20 +103,6 @@ const ppeRefundRequest = (req, res = response) => {
 	//TODO
 	res.status(200).json({
 		msg: `Refund state TODO`,
-	});
-};
-
-const ppePaymentConfirmation = (req, res = response) => {
-	const nro_repertorio = req.query.nro_repertorio;
-
-	if (!nro_repertorio) {
-		res.status(401).json({
-			msg: 'Es necesario el numero de repertorio.',
-		});
-	}
-	//TODO
-	res.status(200).json({
-		msg: `Estado de la solicitud TODO`,
 	});
 };
 
