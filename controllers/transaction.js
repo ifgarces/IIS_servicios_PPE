@@ -25,8 +25,8 @@ const ppePaymentRequest = (req, res = response) => {
 	const { id_persona, numero_repertorio, monto } = req.body;
 
 	if (!id_persona || !numero_repertorio || !monto) {
-		res.status(418).json({
-			msg: 'Missing data in the request body (id_persona , numero_repertorio, monto).',
+		res.status(400).json({
+			msg: 'One of the following parameters are missing: id_persona, numero_repertorio, monto'
 		});
 	} else {
 		pool
@@ -48,82 +48,88 @@ const ppePaymentRequest = (req, res = response) => {
 							'ingresado',
 							null,
 							true,
-							'esperando',
-						],
+							'esperando'
+						]
 					)
 					.then((results) => {
 						console.log('[ppePaymentRequest] Monto Ingresado');
 						res.status(200).json({
 							msg: 'Pago Ingresado',
-							t_id: new_folio,
+							t_id: new_folio
 						});
 					})
 					.catch((error) => {
 						console.error(`[ppePaymentRequest] Error for request ${req}: ${error}`);
 						res.status(500).json({
-							msg: `Internal Server Error ${error}`,
+							msg: `Internal Server Error ${error}`
 						});
 					});
 			})
 			.catch((error) => {
 				console.error(`[ppePaymentRequest] Error for request ${req}: ${error}`);
 				res.status(500).json({
-					msg: `Internal Server Error ${error}`,
+					msg: `Internal Server Error ${error}`
 				});
 			});
 		}
 };
 
-const ppePaymentConfirmation = (req, res = response) => {
-	const nro_repertorio = req.body.nro_repertorio;
+/**
+ ** This is wrong, see the PPE API documentation.
+ */
+// const ppePaymentConfirmation = (req, res = response) => {
+// 	const nro_repertorio = req.body.nro_repertorio;
 
-	if (!nro_repertorio) {
-		res.status(401).json({
-			msg: 'Es necesario el numero de repertorio.',
-		});
-	} else {
-		pool
-			.query(
-				`SELECT estado_TGR FROM TransaccionTGR WHERE numero_repertorio = $1`,
-				[nro_repertorio],
-			)
-			.then((results) => {
-				if (results.rowCount == 0) {
-					// transaccion no existe
-					console.log(
-						`[ppePaymentConfirmation] POST ---  transaccion NO existe`,
-					);
-					res.status(200).json({
-						valid: false,
-					});
-					return;
-				}
-				console.log(`[licensePlateCheck] POST --- Vehiculo SI existe`);
-				let status = results.rows[0];
-				res.status(200).json({
-					valid: true,
-					msg: status,
-				});
-			});
-	}
-};
+// 	if (!nro_repertorio) {
+// 		res.status(401).json({
+// 			msg: 'Es necesario el numero de repertorio.',
+// 		});
+// 	} else {
+// 		pool
+// 			.query(
+// 				`SELECT estado_TGR FROM TransaccionTGR WHERE numero_repertorio = $1`,
+// 				[nro_repertorio],
+// 			)
+// 			.then((results) => {
+// 				if (results.rowCount == 0) {
+// 					// transaccion no existe
+// 					console.log(
+// 						`[ppePaymentConfirmation] POST ---  transaccion NO existe`,
+// 					);
+// 					res.status(200).json({
+// 						valid: false,
+// 					});
+// 					return;
+// 				}
+// 				console.log(`[ppePaymentConfirmation] POST --- transaccion SI existe`);
+// 				let status = results.rows[0];
+// 				res.status(200).json({
+// 					valid: true,
+// 					msg: status,
+// 				});
+// 			});
+// 	}
+// };
 
-const ppeRefundRequest = (req, res = response) => {
-	const { persona_id, nro_repertorio, monto } = req.body;
+/**
+ ** Won't be implemented, unless the client changes his mind.
+ */
+// const ppeRefundRequest = (req, res = response) => {
+// 	const { persona_id, nro_repertorio, monto } = req.body;
 
-	if (!persona_id || !nro_repertorio || !monto) {
-		res.status(418).json({
-			msg: 'Missing data in the request body (persona_id , nro_repertorio, monto).',
-		});
-	}
-	//TODO
-	res.status(200).json({
-		msg: `Refund state TODO`,
-	});
-};
+// 	if (!persona_id || !nro_repertorio || !monto) {
+// 		res.status(418).json({
+// 			msg: 'Missing data in the request body (persona_id , nro_repertorio, monto).',
+// 		});
+// 	}
+// 	//TODO
+// 	res.status(200).json({
+// 		msg: `Refund state TODO`,
+// 	});
+// };
 
 module.exports = {
 	ppePaymentRequest,
-	ppeRefundRequest,
-	ppePaymentConfirmation,
+	//// ppeRefundRequest,
+	//// ppePaymentConfirmation,
 };
