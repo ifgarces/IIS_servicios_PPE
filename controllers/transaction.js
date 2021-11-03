@@ -31,23 +31,39 @@ const ppePaymentRequest = (req, res = response) => {
 	} else {
 		pool
 			.query(
-				'INSERT INTO TransaccionTGR (folio,id_persona,numero_repertorio,timestamp_recepcion,monto,estado_transaccion,fecha_aprobacion,ingreso,estado_TGR) VALUES (cast((SELECT folio FROM TransaccionTGR ORDER BY folio DESC LIMIT 1) as INT)+1,$1,$2,$3,$4,$5,$6,$7,$8)',
-				[
-					id_persona,
-					numero_repertorio,
-					getCurrentServerTimestamp(),
-					monto,
-					'ingresado',
-					null,
-					true,
-					'esperando',
-				],
+				'SELECT folio FROM TransaccionTGR ORDER BY folio DESC LIMIT 1'
 			)
-			.then((results) => {
-				console.log('[ppePaymentRequest] Monto Ingresado');
-				res.status(200).json({
-					msg: 'Pago Ingresado',
-				});
+			.then(results => {
+				new_folio = results.rows[0].folio + 1;
+				
+				pool
+					.query(
+						'INSERT INTO TransaccionTGR (folio,id_persona,numero_repertorio,timestamp_recepcion,monto,estado_transaccion,fecha_aprobacion,ingreso,estado_TGR) VALUES (cast((SELECT folio FROM TransaccionTGR ORDER BY folio DESC LIMIT 1) as INT)+1,$1,$2,$3,$4,$5,$6,$7,$8)',
+						[
+							new_folio,
+							id_persona,
+							numero_repertorio,
+							getCurrentServerTimestamp(),
+							monto,
+							'ingresado',
+							null,
+							true,
+							'esperando',
+						],
+					)
+					.then((results) => {
+						console.log('[ppePaymentRequest] Monto Ingresado');
+						res.status(200).json({
+							msg: 'Pago Ingresado',
+							t_id: new_folio,
+						});
+					})
+					.catch((error) => {
+						console.error(`[ppePaymentRequest] Error for request ${req}: ${error}`);
+						res.status(500).json({
+							msg: `Internal Server Error ${error}`,
+						});
+					});
 			})
 			.catch((error) => {
 				console.error(`[ppePaymentRequest] Error for request ${req}: ${error}`);
@@ -55,7 +71,7 @@ const ppePaymentRequest = (req, res = response) => {
 					msg: `Internal Server Error ${error}`,
 				});
 			});
-	}
+		}
 };
 
 const ppePaymentConfirmation = (req, res = response) => {
