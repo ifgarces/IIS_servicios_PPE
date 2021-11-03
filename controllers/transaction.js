@@ -40,7 +40,6 @@ const ppePaymentRequest = (req, res = response) => {
 					.query(
 						'INSERT INTO TransaccionTGR (folio,id_persona,numero_repertorio,timestamp_recepcion,monto,estado_transaccion,fecha_aprobacion,ingreso,estado_TGR) VALUES (cast((SELECT folio FROM TransaccionTGR ORDER BY folio DESC LIMIT 1) as INT)+1,$1,$2,$3,$4,$5,$6,$7,$8)',
 						[
-							new_folio,
 							id_persona,
 							numero_repertorio,
 							getCurrentServerTimestamp(),
