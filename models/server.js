@@ -31,7 +31,7 @@ class Server {
 
 	listen() {
 		this.app.listen(process.env.API_PORT, () => {
-			console.log(`http://localhost:${this.port} is alive`);
+			console.log('Running server on port', this.port);
 		});
 	}
 }

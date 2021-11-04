@@ -4,5 +4,5 @@
 
 \set ON_ERROR_STOP true
 
-INSERT INTO TransaccionTGR(folio, id_persona, numero_repertorio, timestamp_recepcion, monto, estado_transaccion, fecha_aprobacion, ingreso, estado_TGR) VALUES
-('1','18788857-3', '1234',  '2005-12-31', 23308, 'ingresado', null, True, 'esperando');
+INSERT INTO TransaccionTGR(id_persona, numero_repertorio, timestamp_recepcion, monto, estado_transaccion, ingreso, estado_TGR) VALUES
+('18788857-3', '2018-1', '2005-12-31', 23308, 'ingresado', True, 'esperando');

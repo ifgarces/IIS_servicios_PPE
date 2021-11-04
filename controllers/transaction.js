@@ -35,17 +35,23 @@ const ppePaymentRequest = (req, res = response) => {
 			)
 			.then(results => {
 				new_folio = results.rows[0].folio + 1;
-				
+
 				pool
 					.query(
-						'INSERT INTO TransaccionTGR (folio,id_persona,numero_repertorio,timestamp_recepcion,monto,estado_transaccion,fecha_aprobacion,ingreso,estado_TGR) VALUES (cast((SELECT folio FROM TransaccionTGR ORDER BY folio DESC LIMIT 1) as INT)+1,$1,$2,$3,$4,$5,$6,$7,$8)',
+						`INSERT INTO TransaccionTGR(
+							folio, id_persona, numero_repertorio, timestamp_recepcion, monto,
+							estado_transaccion, ingreso, estado_TGR
+						) VALUES (
+							cast(
+								(SELECT folio FROM TransaccionTGR ORDER BY folio DESC LIMIT 1) as INT
+							)+1, $1, $2, $3, $4, $5, $6, $7
+						)`,
 						[
 							id_persona,
 							numero_repertorio,
 							getCurrentServerTimestamp(),
 							monto,
 							'ingresado',
-							null,
 							true,
 							'esperando'
 						]
@@ -54,20 +60,22 @@ const ppePaymentRequest = (req, res = response) => {
 						console.log('[ppePaymentRequest] Monto Ingresado');
 						res.status(200).json({
 							msg: 'Pago Ingresado',
-							t_id: new_folio
+							transaction_id: new_folio
 						});
 					})
 					.catch((error) => {
 						console.error(`[ppePaymentRequest] Error for request ${req}: ${error}`);
 						res.status(500).json({
-							msg: `Internal Server Error ${error}`
+							msg: `Internal Server Error`,
+							error: error.toString()
 						});
 					});
 			})
 			.catch((error) => {
 				console.error(`[ppePaymentRequest] Error for request ${req}: ${error}`);
 				res.status(500).json({
-					msg: `Internal Server Error ${error}`
+					msg: `Internal Server Error`,
+					error: error.toString()
 				});
 			});
 		}
