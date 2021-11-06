@@ -160,9 +160,9 @@ const ppePaymentRequest = (req, res = response) => {
 				)
 				.then((results) => {
 					console.log('[ppePaymentRequest] Monto Ingresado');
-					tgrPaymentConfirmation(
-						req.headers['x-forwarded-for'] || req.connection.remoteAddress // passing the IP of the request, i.e. of the Prendas server. Ref: https://codeforgeek.com/how-to-get-users-ip-details-in-express/
-					);
+					// tgrPaymentConfirmation( //TODO: implement
+					// 	req.headers['x-forwarded-for'] || req.connection.remoteAddress // passing the IP of the request, i.e. of the Prendas server. Ref: https://codeforgeek.com/how-to-get-users-ip-details-in-express/
+					// );
 					res.status(200).json({
 						msg: 'Pago Ingresado',
 						transaction_id: new_folio
