@@ -21,102 +21,90 @@ function getCurrentServerTimestamp() {
 		.replace('Z', '');
 }
 
+/**
+ * @param {string} repertorie_id A repertorie ID to check.
+ * @returns {boolean} Whether the given string matches the repertorie ID format "YEAR-NUMBER" or not.
+ */
+function checkRepertorieIdFormat(repertorie_id) {
+	const numericalRegex = new RegExp('^[0-9]+$'); // regex to tell if a string has only digits on it
+	let spltId = repertorie_id.split("-"); // don't know how to use a single regex for all of this
+	return spltId.length == 2 &&
+		spltId[0].length == 4 &&
+		spltId[1].length > 0 &&
+		spltId[1].length <= 6 &&
+		numericalRegex.test(spltId[0]) &&
+		numericalRegex.test(spltId[1]);
+}
+
+/**
+ * API endpoint that registers a transaction attempt in the database and returns the ID of that
+ * transaction. Also starts the asynchronous simulated TGR confirmation for that transaction.
+ */
 const ppePaymentRequest = (req, res = response) => {
 	const { id_persona, numero_repertorio, monto } = req.body;
 
 	if (!id_persona || !numero_repertorio || !monto) {
 		res.status(400).json({
-			msg: 'One of the following parameters are missing: id_persona, numero_repertorio, monto'
+			msg: "One of the following parameters are missing: id_persona, numero_repertorio, monto"
 		});
-	} else {
-		pool
-			.query(
-				'SELECT folio FROM TransaccionTGR ORDER BY folio DESC LIMIT 1'
-			)
-			.then(results => {
-				new_folio = results.rows[0].folio + 1;
+		return;
+	}
+	if (! checkRepertorieIdFormat(numero_repertorio)) {
+		res.status(400).json({
+			msg: "Invalid format for the param numero_repertorio. Must match 'YEAR-number' with a maximum total lenght of 11 characters"
+		});
+		return;
+	}
+	pool
+		.query(
+			'SELECT folio FROM TransaccionTGR ORDER BY folio DESC LIMIT 1'
+		)
+		.then(results => {
+			new_folio = results.rows[0].folio + 1;
 
-				pool
-					.query(
-						`INSERT INTO TransaccionTGR(
-							folio, id_persona, numero_repertorio, timestamp_recepcion, monto,
-							estado_transaccion, ingreso, estado_TGR
-						) VALUES (
-							cast(
-								(SELECT folio FROM TransaccionTGR ORDER BY folio DESC LIMIT 1) as INT
-							)+1, $1, $2, $3, $4, $5, $6, $7
-						)`,
-						[
-							id_persona,
-							numero_repertorio,
-							getCurrentServerTimestamp(),
-							monto,
-							'ingresado',
-							true,
-							'esperando'
-						]
-					)
-					.then((results) => {
-						console.log('[ppePaymentRequest] Monto Ingresado');
-						res.status(200).json({
-							msg: 'Pago Ingresado',
-							transaction_id: new_folio
-						});
-					})
-					.catch((error) => {
-						console.error(`[ppePaymentRequest] Error for request ${req}: ${error}`);
-						res.status(500).json({
-							msg: `Internal Server Error`,
-							error: error.toString()
-						});
+			pool
+				.query(
+					`INSERT INTO TransaccionTGR(
+						folio, id_persona, numero_repertorio, timestamp_recepcion, monto,
+						estado_transaccion, ingreso, estado_TGR
+					) VALUES (
+						cast(
+							(SELECT folio FROM TransaccionTGR ORDER BY folio DESC LIMIT 1) as INT
+						)+1, $1, $2, $3, $4, $5, $6, $7
+					)`,
+					[
+						id_persona,
+						numero_repertorio,
+						getCurrentServerTimestamp(),
+						monto,
+						'ingresado',
+						true,
+						'esperando'
+					]
+				)
+				.then((results) => {
+					console.log('[ppePaymentRequest] Monto Ingresado');
+					res.status(200).json({
+						msg: 'Pago Ingresado',
+						transaction_id: new_folio
 					});
-			})
-			.catch((error) => {
-				console.error(`[ppePaymentRequest] Error for request ${req}: ${error}`);
-				res.status(500).json({
-					msg: `Internal Server Error`,
-					error: error.toString()
+				})
+				.catch((error) => {
+					console.error(`[ppePaymentRequest] Error for request ${req}: ${error}`);
+					res.status(500).json({
+						msg: `Internal Server Error`,
+						error: error.toString()
+					});
 				});
+		})
+		.catch((error) => {
+			console.error(`[ppePaymentRequest] Error for request ${req}: ${error}`);
+			res.status(500).json({
+				msg: `Internal Server Error`,
+				error: error.toString()
 			});
-		}
+		});
 };
-
-/**
- ** This is wrong, see the PPE API documentation.
- */
-// const ppePaymentConfirmation = (req, res = response) => {
-// 	const nro_repertorio = req.body.nro_repertorio;
-
-// 	if (!nro_repertorio) {
-// 		res.status(401).json({
-// 			msg: 'Es necesario el numero de repertorio.',
-// 		});
-// 	} else {
-// 		pool
-// 			.query(
-// 				`SELECT estado_TGR FROM TransaccionTGR WHERE numero_repertorio = $1`,
-// 				[nro_repertorio],
-// 			)
-// 			.then((results) => {
-// 				if (results.rowCount == 0) {
-// 					// transaccion no existe
-// 					console.log(
-// 						`[ppePaymentConfirmation] POST ---  transaccion NO existe`,
-// 					);
-// 					res.status(200).json({
-// 						valid: false,
-// 					});
-// 					return;
-// 				}
-// 				console.log(`[ppePaymentConfirmation] POST --- transaccion SI existe`);
-// 				let status = results.rows[0];
-// 				res.status(200).json({
-// 					valid: true,
-// 					msg: status,
-// 				});
-// 			});
-// 	}
-// };
 
 /**
  ** Won't be implemented, unless the client changes his mind.
@@ -129,7 +117,7 @@ const ppePaymentRequest = (req, res = response) => {
 // 			msg: 'Missing data in the request body (persona_id , nro_repertorio, monto).',
 // 		});
 // 	}
-// 	//TODO
+// 	...
 // 	res.status(200).json({
 // 		msg: `Refund state TODO`,
 // 	});
