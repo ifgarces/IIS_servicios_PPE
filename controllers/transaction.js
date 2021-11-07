@@ -11,14 +11,11 @@ const pool = new Pool({
 });
 
 const TGR_PRENDAS_CONFIRMATION_PORT = process.env.TGR_PRENDAS_CONFIRMATION_PORT;
-const TGR_CONFIRMATION_FAIL_RATIO = parseFloat(
-	process.env.TGR_CONFIRMATION_FAIL_RATIO,
-);
+const TGR_CONFIRMATION_FAIL_RATIO = parseFloat(process.env.TGR_CONFIRMATION_FAIL_RATIO);
 const TGR_WAIT_SECONDS_MIN = parseInt(process.env.TGR_WAIT_SECONDS_MIN);
 const TGR_WAIT_SECONDS_MAX = parseInt(process.env.TGR_WAIT_SECONDS_MAX);
-const TGR_CONFIRMATION_RETRY_SECONDS = parseInt(
-	process.env.TGR_CONFIRMATION_RETRY_SECONDS,
-);
+const TGR_CONFIRMATION_RETRY_SECONDS = parseInt(process.env.TGR_CONFIRMATION_RETRY_SECONDS);
+const TGR_CONFIRMATION_RETRIES_COUNT = parseInt(process.env.TGR_CONFIRMATION_RETRIES_COUNT);
 
 /**
  * Source: https://gist.github.com/jczaplew/f055788bf851d0840f50#gistcomment-3237674
@@ -73,6 +70,8 @@ function checkDoubledPayment(amount, person_id, repertorie_id) {
  * @returns {boolean} Whether the given amount is between 1-99999.
  */
 function checkEnteredAmount(amount) {
+	let amountInt = parseInt(amount);
+	//return ((! isNaN(amountInt)) && (amountInt > 0) && (amountInt < max...));
 	const oneToNinetyNineThousandRegex = new RegExp(
 		'^([1-9]|[1-9][0-9]|[1-9][0-9][0-9]|[1-9][0-9][0-9][0-9]|[1-9][0-9][0-9][0-9][0-9])$',
 	);
@@ -117,29 +116,29 @@ function randInt(min, max) {
 
 /**
  * Executes all the logic for the async TGR confirmation. Has to be invoked after a successfull
- * payment request.
+ * payment request. If the confirmation request to `prendas_ip` fails, will wait for a time and
+ * retry. See the `.env` file to view parameters related to this feature.
  * @param {string} prendas_ip The IP to deliver the HTTP request.
  * @param {number} transaction_id ID of the payment to confirm.
  * @returns {void}
  */
 async function tgrPaymentConfirmation(prendas_ip, transaction_id) {
-	const prendasConfirmPaymentCall = async function (transactionId) {
-		// see https://stackoverflow.com/a/68424993/12684271
+	const prendasConfirmPaymentCall = async function () { // promise for the actual confirmation API call
 		return new Promise((resolve, reject) => {
 			fetch(
-				`http://${prendas_ip}:${TGR_PRENDAS_CONFIRMATION_PORT}/api/tgr_confirmation`,
+				`http://${prendas_ip}:${TGR_PRENDAS_CONFIRMATION_PORT}/api/tgr_confirmation`, //!
 				{
-					method: 'POST',
+					method: "POST",
 					headers: {
-						'Content-Type': 'application/json',
+						"Content-Type": "application/json",
 					},
 					body: {
-						transactionId: transactionId,
+						"transaction_id": transaction_id,
 					},
 				},
 			)
 				.then((response) => {
-					console.log(
+					console.debug(
 						`[tgrPaymentConfirmation] Got confirmation call response: ${response.toString()}`,
 					);
 					resolve(response.ok);
@@ -149,12 +148,16 @@ async function tgrPaymentConfirmation(prendas_ip, transaction_id) {
 				});
 		});
 	};
+	const waitAndLogRetry = function (tryNumber) { // for when waiting for next confirmation attempt (auxiliar function to avoid dupplicated code)
+		await new Promise(resolve => setTimeout(resolve, TGR_CONFIRMATION_RETRY_SECONDS * 1000));
+		console.debug(`[tgrPaymentConfirmation] Try number ${tryNumber} to confirm transaction ${transaction_id}`);
+	};
 
-	if (Math.random() < TGR_CONFIRMATION_FAIL_RATIO) {
-		console.log(
+	if (Math.random() < TGR_CONFIRMATION_FAIL_RATIO) { // confirmation will never be sent on purpose
+		console.warn( // warn, because this is a simulated failure of the payment confirmation service
 			`[tgrPaymentConfirmation] Won't send confirmation for transaction ${transaction_id} to ${prendas_ip}`,
 		);
-		return; // confirmation won't be sent on purpose
+		return;
 	}
 
 	let sleepTime = randint(TGR_WAIT_SECONDS_MIN, TGR_WAIT_SECONDS_MAX);
@@ -163,27 +166,33 @@ async function tgrPaymentConfirmation(prendas_ip, transaction_id) {
 	);
 	await new Promise((resolve) => setTimeout(resolve, sleepTime * 1000));
 
-	// Now we send the transaction confirmation request to Prendas
 	console.log(
 		`[tgrPaymentConfirmation] Sending confirmation call of transaction ${transaction_id} to ${prendas_ip}...`,
 	);
-	prendasConfirmPaymentCall(transaction_id)
-		.then((isResponseOk) => {
-			//if (! isResponseOk) ...
-		})
-		.catch((error) => {
-			// ...
-		});
-	//TODO: indefinetely retry until succeeded
-	// console.log(`[tgrPaymentConfirmation] Confirmation call failed, will retry in ${TGR_CONFIRMATION_RETRY_SECONDS} seconds`);
-	// await new Promise(resolve => // if the request failed, we retry after a set amount of time
-	// 	setTimeout(resolve, TGR_CONFIRMATION_RETRY_SECONDS * 1000)
-	// );
+	let currentTry = 0;
+	while (true) {
+		currentTry++;
+		if (currentTry > TGR_CONFIRMATION_RETRIES_COUNT) {
+			console.warn(`[tgrPaymentConfirmation] Transaction ${transaction_id} could not get confirmed: maximum retries reached (${currentTry - 1})`);
+			return;
+		}
+		try {
+			if (await prendasConfirmPaymentCall()) {
+				console.log(`[tgrPaymentConfirmation] Transaction ${transaction_id} successfully confiremd to ${prendas_ip} after ${currentTry} tries`);
+				return;
+			}
+			console.debug(`[tgrPaymentConfirmation] Confirmation for transaction ${transaction_id} got error response`);
+			waitAndLogRetry(currentTry);
+		} catch (error) {
+			console.debug(`[tgrPaymentConfirmation] Confirmation for transaction ${transaction_id} could not be sent: ${error}`);
+			waitAndLogRetry(currentTry);
+		}
+	}
 }
 
 /**
  * API endpoint that registers a transaction attempt in the database and returns the ID of that
- * transaction. Also starts the asynchronous simulated TGR confirmation for that transaction.
+ * transaction. Also starts the asynchronous TGR confirmation "callback" for that transaction.
  */
 const ppePaymentRequest = (req, res = response) => {
 	const { id_persona, numero_repertorio, monto } = req.body;
@@ -193,17 +202,20 @@ const ppePaymentRequest = (req, res = response) => {
 			msg: 'One of the following parameters are missing: id_persona, numero_repertorio, monto',
 		});
 		return;
-	} else if (!checkRepertorieIdFormat(numero_repertorio)) {
+	}
+	if (!checkRepertorieIdFormat(numero_repertorio)) {
 		res.status(400).json({
-			msg: "Invalid format for the param numero_repertorio. Must match 'YEAR-number' with a maximum total lenght of 11 characters and the year has to belong between 1800-2021",
+			msg: "Invalid format for the param numero_repertorio. Must match 'YEAR-number' with a maximum total lenght of 11 characters, and also the YEAR must be in range [1800, 2021]",
 		});
 		return;
-	} else if (!checkIdPersona(id_persona)) {
+	}
+	if (!checkIdPersona(id_persona)) {
 		res.status(400).json({
 			msg: "Invalid format for the param id_persona. mind the format: 12345678-k the lenght has to be between 9 and 10 characters with the 'dash' included.",
 		});
 		return;
-	} else if (!checkEnteredAmount(monto)) {
+	}
+	if (!checkEnteredAmount(monto)) {
 		res.status(400).json({
 			msg: 'The amount entered is incorrect, remember it has to be positive and lower than 99999!',
 		});
