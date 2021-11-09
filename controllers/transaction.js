@@ -56,10 +56,6 @@ function checkDuplicatedPayment(amount, person_id, repertorie_id) {
 		})
 		.catch((error) => {
 			console.error(`[ppePaymentRequest] Error checking duplicated payment: ${error}`,);
-			/* res.status(500).json({
-				msg: `Internal Server Error`,
-				error: error.toString(),
-			}); */
 			return false;
 		});
 }
@@ -248,11 +244,9 @@ const ppePaymentRequest = (req, res = response) => {
 					});
 				})
 				.catch((error) => {
-					console.error(
-						`[ppePaymentRequest] Error for request ${req}: ${error}`,
-					);
+					console.error(`[ppePaymentRequest] Error for request ${req}: ${error}`);
 					res.status(500).json({
-						msg: `Internal Server Error`,
+						msg: "Internal Server Error",
 						error: error.toString(),
 					});
 				});
@@ -260,7 +254,7 @@ const ppePaymentRequest = (req, res = response) => {
 		.catch((error) => {
 			console.error(`[ppePaymentRequest] Error for request ${req}: ${error}`);
 			res.status(500).json({
-				msg: `Internal Server Error`,
+				msg: "Internal Server Error",
 				error: error.toString(),
 			});
 		});
@@ -286,5 +280,4 @@ const ppePaymentRequest = (req, res = response) => {
 module.exports = {
 	ppePaymentRequest,
 	//// ppeRefundRequest,
-	//// ppePaymentConfirmation,
 };
