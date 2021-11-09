@@ -29,12 +29,13 @@ function getCurrentServerTimestamp() {
 }
 
 /**
+ * For avoiding unwanted duplicated transactions.
  * @param {string} amount The payment amount of the transaction.
  * @param {string} person_id The id of the person who is trying to pay.
  * @param {string} repertorie_id The repertorie id.
- * @returns {boolean} Whether the given transacction was already attempted.
+ * @returns {boolean} Whether the given transaction was already attempted.
  */
-function checkDoubledPayment(amount, person_id, repertorie_id) {
+function checkDuplicatedPayment(amount, person_id, repertorie_id) {
 	//! Currently not working
 	pool
 		.query(
@@ -54,9 +55,7 @@ function checkDoubledPayment(amount, person_id, repertorie_id) {
 			return false;
 		})
 		.catch((error) => {
-			console.error(
-				`[ppePaymentRequest] Error checking duplicated payment: ${error}`,
-			);
+			console.error(`[ppePaymentRequest] Error checking duplicated payment: ${error}`,);
 			/* res.status(500).json({
 				msg: `Internal Server Error`,
 				error: error.toString(),
@@ -67,27 +66,21 @@ function checkDoubledPayment(amount, person_id, repertorie_id) {
 
 /**
  * @param {string} amount A given amount of money to check.
- * @returns {boolean} Whether the given amount is between 1-99999.
+ * @returns {boolean} Whether the given amount is numberic and positive.
  */
 function checkEnteredAmount(amount) {
-	let amountInt = parseInt(amount);
-	//return ((! isNaN(amountInt)) && (amountInt > 0) && (amountInt < max...));
-	const oneToNinetyNineThousandRegex = new RegExp(
-		'^([1-9]|[1-9][0-9]|[1-9][0-9][0-9]|[1-9][0-9][0-9][0-9]|[1-9][0-9][0-9][0-9][0-9])$',
-	);
-	return oneToNinetyNineThousandRegex.test(amount);
-	//? will we have specific amounts for the payments?
+	let amountFloat = parseFloat(amount);
+	return ((!isNaN(amountFloat)) && (amountFloat > 0));
 }
 
 /**
  * @param {string} id_persona A person ID to check.
- * @returns {boolean} Whether the given string matches the id_persona format.
+ * @returns {boolean} Whether the given string matches the format of a RUN, RUT or passport ID.
  */
 function checkIdPersona(person_id) {
-	const idRegex = new RegExp('^[0-9]{7,8}-([0-9]|k)$');
-	return idRegex.test(person_id);
-	//?Does the TGR service has to check wether a person exists?
-	//?Should we then call to our service in the SRCEI?
+	const runRegex = new RegExp('^[0-9]{7,8}-([0-9]|K)$'); // warning: case sensitive
+	const passportRegex = new RegExp("^P[0-9]{7,8}$");
+	return (runRegex.test(person_id) || passportRegex.test(person_id));
 }
 
 /**
@@ -99,8 +92,6 @@ function checkRepertorieIdFormat(repertorie_id) {
 		'^(18[0-9]{2}|19[0-9]{2}|200[0-9]|201[0-9]|202[0-1])-[0-9]{1,6}$',
 	);
 	return numericalRegex.test(repertorie_id);
-	//* this should work, admits years from 1800 to 2021 only
-	//? Does the repertorie number has to be an actual number of does something like 090 works too?
 }
 
 /**
@@ -126,7 +117,7 @@ async function tgrPaymentConfirmation(prendas_ip, transaction_id) {
 	const prendasConfirmPaymentCall = async function () { // promise for the actual confirmation API call
 		return new Promise((resolve, reject) => {
 			fetch(
-				`http://${prendas_ip}:${TGR_PRENDAS_CONFIRMATION_PORT}/api/tgr_confirmation`, //!
+				`http://${prendas_ip}:${TGR_PRENDAS_CONFIRMATION_PORT}/api/tgr_confirmation`, //* BOTH Prendas servers should expose this endpoint, just like this
 				{
 					method: "POST",
 					headers: {
@@ -148,7 +139,7 @@ async function tgrPaymentConfirmation(prendas_ip, transaction_id) {
 				});
 		});
 	};
-	const waitAndLogRetry = function (tryNumber) { // for when waiting for next confirmation attempt (auxiliar function to avoid dupplicated code)
+	const waitAndLogRetry = async function (tryNumber) { // for when waiting for next confirmation attempt (auxiliar function to avoid dupplicated code)
 		await new Promise(resolve => setTimeout(resolve, TGR_CONFIRMATION_RETRY_SECONDS * 1000));
 		console.debug(`[tgrPaymentConfirmation] Try number ${tryNumber} to confirm transaction ${transaction_id}`);
 	};
@@ -182,10 +173,10 @@ async function tgrPaymentConfirmation(prendas_ip, transaction_id) {
 				return;
 			}
 			console.debug(`[tgrPaymentConfirmation] Confirmation for transaction ${transaction_id} got error response`);
-			waitAndLogRetry(currentTry);
+			await waitAndLogRetry(currentTry);
 		} catch (error) {
 			console.debug(`[tgrPaymentConfirmation] Confirmation for transaction ${transaction_id} could not be sent: ${error}`);
-			waitAndLogRetry(currentTry);
+			await waitAndLogRetry(currentTry);
 		}
 	}
 }
@@ -199,25 +190,25 @@ const ppePaymentRequest = (req, res = response) => {
 
 	if (!id_persona || !numero_repertorio || !monto) {
 		res.status(400).json({
-			msg: 'One of the following parameters are missing: id_persona, numero_repertorio, monto',
+			msg: "One of the following parameters are missing: id_persona, numero_repertorio, monto",
 		});
 		return;
 	}
 	if (!checkRepertorieIdFormat(numero_repertorio)) {
 		res.status(400).json({
-			msg: "Invalid format for the param numero_repertorio. Must match 'YEAR-number' with a maximum total lenght of 11 characters, and also the YEAR must be in range [1800, 2021]",
+			msg: "Invalid parameter 'numero_repertorio': bad format. Must match 'YEAR-number' with a maximum total lenght of 11 characters, and the YEAR must be in range [1800, 2021]",
 		});
 		return;
 	}
-	if (!checkIdPersona(id_persona)) {
+	if (!checkIdPersona(id_persona.toString().toUpperCase())) {
 		res.status(400).json({
-			msg: "Invalid format for the param id_persona. mind the format: 12345678-k the lenght has to be between 9 and 10 characters with the 'dash' included.",
+			msg: "Invalid parameter 'id_persona': must be a RUN/RUT (e.g. '12345678-k') or a passport number (e.g. 'P0123456')",
 		});
 		return;
 	}
 	if (!checkEnteredAmount(monto)) {
 		res.status(400).json({
-			msg: 'The amount entered is incorrect, remember it has to be positive and lower than 99999!',
+			msg: "invalid paremeter 'monto': must be numberic and positive",
 		});
 		return;
 	}
@@ -237,7 +228,7 @@ const ppePaymentRequest = (req, res = response) => {
 						)+1, $1, $2, $3, $4, $5, $6, $7
 					)`,
 					[
-						id_persona,
+						id_persona.toUpperCase(),
 						numero_repertorio,
 						getCurrentServerTimestamp(),
 						monto,
