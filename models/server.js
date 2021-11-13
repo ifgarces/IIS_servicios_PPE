@@ -31,6 +31,13 @@ class Server {
 
 	listen() {
 		this.app.listen(process.env.API_PORT, () => {
+			console.debug("TGR params:");
+			console.debug(`    TGR_PRENDAS_CONFIRMATION_PORT=${process.env.TGR_PRENDAS_CONFIRMATION_PORT}`);
+			console.debug(`    TGR_CONFIRMATION_FAIL_RATIO=${process.env.TGR_CONFIRMATION_FAIL_RATIO}`);
+			console.debug(`    TGR_WAIT_SECONDS_MIN=${process.env.TGR_WAIT_SECONDS_MIN}`);
+			console.debug(`    TGR_WAIT_SECONDS_MAX=${process.env.TGR_WAIT_SECONDS_MAX}`);
+			console.debug(`    TGR_CONFIRMATION_RETRY_SECONDS=${process.env.TGR_CONFIRMATION_RETRY_SECONDS}`);
+			console.debug(`    TGR_PRENDAS_CONFIRMATION_PORT=${process.env.TGR_CONFIRMATION_RETRIES_COUNT}`);
 			console.log('Running server on port', this.port);
 		});
 	}
