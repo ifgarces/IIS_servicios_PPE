@@ -2,10 +2,7 @@ const { response } = require('express');
 const Pool = require('pg').Pool;
 const axios = require('axios');
 require('log-timestamp');
-/* import 'isomorphic-fetch';
-const fetch = (url) =>
-	import('node-fetch').then(({ default: fetch }) => fetch(url)); // https://stackoverflow.com/a/69043801/12684271
- */
+
 const pool = new Pool({
 	user: process.env.PGUSER,
 	host: process.env.PGHOST,
@@ -15,17 +12,11 @@ const pool = new Pool({
 });
 
 const TGR_PRENDAS_CONFIRMATION_PORT = process.env.TGR_PRENDAS_CONFIRMATION_PORT;
-const TGR_CONFIRMATION_FAIL_RATIO = parseFloat(
-	process.env.TGR_CONFIRMATION_FAIL_RATIO,
-);
+const TGR_CONFIRMATION_FAIL_RATIO = parseFloat(process.env.TGR_CONFIRMATION_FAIL_RATIO);
 const TGR_WAIT_SECONDS_MIN = parseInt(process.env.TGR_WAIT_SECONDS_MIN);
 const TGR_WAIT_SECONDS_MAX = parseInt(process.env.TGR_WAIT_SECONDS_MAX);
-const TGR_CONFIRMATION_RETRY_SECONDS = parseInt(
-	process.env.TGR_CONFIRMATION_RETRY_SECONDS,
-);
-const TGR_CONFIRMATION_RETRIES_COUNT = parseInt(
-	process.env.TGR_CONFIRMATION_RETRIES_COUNT,
-);
+const TGR_CONFIRMATION_RETRY_SECONDS = parseInt(process.env.TGR_CONFIRMATION_RETRY_SECONDS);
+const TGR_CONFIRMATION_RETRIES_COUNT = parseInt(process.env.TGR_CONFIRMATION_RETRIES_COUNT);
 
 /**
  * Source: https://gist.github.com/jczaplew/f055788bf851d0840f50#gistcomment-3237674
@@ -115,85 +106,84 @@ function getRandomInt(min, max) {
 
 /**
  * Executes all the logic for the async TGR confirmation. Has to be invoked after a successfull
- * payment request. If the confirmation request to `prendas_ip` fails, will wait for a time and
+ * payment request. If the confirmation request to `target_host` fails, will wait for a time and
  * retry. See the `.env` file to view parameters related to this feature.
- * @param {string} prendas_ip The IP to deliver the HTTP request.
- * @param {number} transaction_id ID of the payment to confirm.
+ * @param {string} target_host The IP to deliver the HTTP request.
+ * @param {number} transaction_id ID of the payment to be confirmed.
  * @returns {void}
  */
-async function tgrPaymentConfirmation(prendas_ip, transaction_id, endpoint) {
-	console.debug(
-		`[debug] prendas_ip=${prendas_ip}, transaction_id=${transaction_id}`,
-	);
-	console.debug(`[debug] prendas_endpoint = ${endpoint}`);
+async function tgrPaymentConfirmation(target_host, transaction_id) {
+	const target_url = `http://${target_host}:${TGR_PRENDAS_CONFIRMATION_PORT}/api/tgr_confirmation`;
+	// console.debug(`[tgrPaymentConfirmation] target_url=${target_url}`);
+
+	/**
+	 * Performs the confirmation API call itself.
+	 * @returns {boolean} Wether the response status is 200 OK or not.
+	 */
 	const prendasConfirmPaymentCall = async function () {
-		try {
-			console.log('Executing post call');
-			await axios.post(endpoint, {
-				transaction_id: transaction_id,
-			});
-			return true;
-		} catch (err) {
-			console.log('Inside post error:', err);
-			return false;
-		}
+		let callResult = await axios.post(target_url, {
+			body: {
+				"transaction_id": transaction_id
+			}
+		});
+		return (callResult.status == 200);
 	};
+
+	/**
+	 * For when waiting for the next confirmation attempt after request failure (auxiliar function
+	 * to avoid dupplicated code)
+	 * @param {number} tryNumber The current try number.
+	 */
 	const waitAndLogRetry = async function (tryNumber) {
-		// for when waiting for next confirmation attempt (auxiliar function to avoid dupplicated code)
 		console.debug(
-			`[tgrPaymentConfirmation] Will wait ${TGR_CONFIRMATION_RETRY_SECONDS} seconds until next try for transaction ${transaction_id}`,
+			`[tgrPaymentConfirmation] Will wait ${TGR_CONFIRMATION_RETRY_SECONDS} seconds until next try for transaction ${transaction_id}`
 		);
-		await new Promise((resolve) =>
-			setTimeout(resolve, TGR_CONFIRMATION_RETRY_SECONDS * 1000),
-		);
+		await new Promise((resolve) => setTimeout(resolve, TGR_CONFIRMATION_RETRY_SECONDS * 1000));
 		console.debug(
-			`[tgrPaymentConfirmation] Try number ${tryNumber} for transaction ${transaction_id}`,
+			`[tgrPaymentConfirmation] Try number ${tryNumber} for transaction ${transaction_id}`
 		);
 	};
 
 	if (Math.random() < TGR_CONFIRMATION_FAIL_RATIO) {
-		// confirmation will never be sent on purpose
+		// Confirmation will never be sent on purpose (simulated TGR failure)
 		console.warn(
-			// warn, because this is a simulated failure of the payment confirmation service
-			`[tgrPaymentConfirmation] Won't send confirmation for transaction ${transaction_id} to ${prendas_ip}`,
+			`[tgrPaymentConfirmation] Won't send confirmation for transaction ${transaction_id} to ${target_host}`
 		);
 		return;
 	}
 
 	let sleepTime = getRandomInt(TGR_WAIT_SECONDS_MIN, TGR_WAIT_SECONDS_MAX);
 	console.log(
-		`[tgrPaymentConfirmation] Will send confirmation of transaction ${transaction_id} after ${sleepTime} seconds`,
+		`[tgrPaymentConfirmation] Will send confirmation of transaction ${transaction_id} after ${sleepTime} seconds`
 	);
 	await new Promise((resolve) => setTimeout(resolve, sleepTime * 1000));
 
 	console.log(
-		`[tgrPaymentConfirmation] Sending confirmation call of transaction ${transaction_id} to ${prendas_ip}...`,
+		`[tgrPaymentConfirmation] Sending confirmation call of transaction ${transaction_id} to ${target_url}...`
 	);
 	let currentTry = 0;
 	while (true) {
 		currentTry++;
 		if (currentTry > TGR_CONFIRMATION_RETRIES_COUNT) {
 			console.warn(
-				`[tgrPaymentConfirmation] Transaction ${transaction_id} could not get confirmed: maximum retries reached (${
-					currentTry - 1
-				})`,
+				`[tgrPaymentConfirmation] Transaction ${transaction_id} could not get confirmed: maximum retries reached (${currentTry - 1})`
 			);
 			return;
 		}
 		try {
 			if (await prendasConfirmPaymentCall()) {
 				console.log(
-					`[tgrPaymentConfirmation] Transaction ${transaction_id} successfully confiremd to ${prendas_ip} after ${currentTry} tries`,
+					`[tgrPaymentConfirmation] Transaction ${transaction_id} successfully confiremd to ${target_host} after ${currentTry} tries`
 				);
 				return;
 			}
 			console.debug(
-				`[tgrPaymentConfirmation] Confirmation for transaction ${transaction_id} got error response`,
+				`[tgrPaymentConfirmation] Confirmation for transaction ${transaction_id} got error response`
 			);
 			await waitAndLogRetry(currentTry);
 		} catch (error) {
 			console.debug(
-				`[tgrPaymentConfirmation] Confirmation for transaction ${transaction_id} could not be sent: ${error}`,
+				`[tgrPaymentConfirmation] Confirmation for transaction ${transaction_id} could not be sent: ${error}`
 			);
 			await waitAndLogRetry(currentTry);
 		}
@@ -205,11 +195,11 @@ async function tgrPaymentConfirmation(prendas_ip, transaction_id, endpoint) {
  * transaction. Also starts the asynchronous TGR confirmation "callback" for that transaction.
  */
 const ppePaymentRequest = (req, res = response) => {
-	const { id_persona, numero_repertorio, monto, post_endpoint } = req.body;
+	const { id_persona, numero_repertorio, monto, confirmation_ip } = req.body;
 
-	if (!id_persona || !numero_repertorio || !monto) {
+	if ([id_persona, numero_repertorio, monto, confirmation_ip].includes(undefined)) {
 		res.status(400).json({
-			msg: 'One of the following parameters are missing: id_persona, numero_repertorio, monto',
+			msg: 'One of the following parameters are missing: id_persona, numero_repertorio, monto, confirmation_ip',
 		});
 		return;
 	}
@@ -234,7 +224,7 @@ const ppePaymentRequest = (req, res = response) => {
 	pool
 		.query('SELECT folio FROM TransaccionTGR ORDER BY folio DESC LIMIT 1')
 		.then((results) => {
-			new_folio = results.rows[0].folio + 1;
+			let paymentNewFolio = results.rows[0].folio + 1;
 
 			pool
 				.query(
@@ -258,18 +248,11 @@ const ppePaymentRequest = (req, res = response) => {
 				)
 				.then((results) => {
 					console.log('[ppePaymentRequest] Monto Ingresado');
-					//console.debug(`[ppePaymentRequest] IP of request is ${req.headers['x-forwarded-for']} or ${req.connection.remoteAddress}`); Ref: https://codeforgeek.com/how-to-get-users-ip-details-in-express/
-					if (post_endpoint) {
-						console.log(`The endpoint given is: ${post_endpoint}`);
-						tgrPaymentConfirmation(
-							req.connection.remoteAddress.split(':').slice(-1), // passing the IP of the request, i.e. of the Prendas server. We split, because it seems to be a string of format "::ffff:ACTUAL_IP".
-							new_folio,
-							post_endpoint,
-						);
-					}
+					// console.debug(`[ppePaymentRequest] IP of request is ${req.headers['x-forwarded-for']} or ${req.connection.remoteAddress}`); Ref: https://codeforgeek.com/how-to-get-users-ip-details-in-express/
+					tgrPaymentConfirmation(confirmation_ip, paymentNewFolio); // invoking async confirmation task
 					res.status(200).json({
 						msg: 'Pago Ingresado',
-						transaction_id: new_folio,
+						transaction_id: paymentNewFolio
 					});
 				})
 				.catch((error) => {

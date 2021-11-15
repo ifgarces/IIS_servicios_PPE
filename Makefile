@@ -10,7 +10,10 @@ build:
 
 # Runs a container from the image, outputting to stdout/stderr
 run: build
-	docker run -it --rm --name "${IMAGE_NAME}_container" -p ${API_PORT}:${API_PORT} ${IMAGE_NAME}
+	docker run -it --rm --name "${IMAGE_NAME}_container" \
+		-p ${API_PORT}:${API_PORT} \
+		-p ${TGR_PRENDAS_CONFIRMATION_PORT}:${TGR_PRENDAS_CONFIRMATION_PORT} \
+		${IMAGE_NAME}
 
 # Runs the container in the background
 run_detach: build
