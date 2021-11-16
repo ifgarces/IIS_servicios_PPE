@@ -20,9 +20,9 @@ const TGR_CONFIRMATION_RETRIES_COUNT = parseInt(process.env.TGR_CONFIRMATION_RET
 
 /**
  * Source: https://gist.github.com/jczaplew/f055788bf851d0840f50#gistcomment-3237674
- * @returns {string} The current server datetime, converted to SQL timestamp format.
+ * @returns {string} The current local datetime, converted to SQL timestamp format.
  */
-function getCurrentServerTimestamp() {
+function getCurrentTimestamp() {
 	return new Date(Date.now() + 1000 * 60 * -new Date().getTimezoneOffset())
 		.toISOString()
 		.replace('T', ' ')
@@ -36,32 +36,32 @@ function getCurrentServerTimestamp() {
  * @param {string} repertorie_id The repertorie id.
  * @returns {boolean} Whether the given transaction was already attempted.
  */
-function checkDuplicatedPayment(amount, person_id, repertorie_id) {
-	//! Currently not working
-	pool
-		.query(
-			'SELECT EXISTS(SELECT folio from TransaccionTGR WHERE id_persona=$1 AND numero_repertorio=$2 AND monto=$3)',
-			[person_id, repertorie_id, amount],
-		)
-		.then((results) => {
-			console.log(`The result fields are:${results.fields}`);
-			console.log(`The rowCount is:${results.rowCount}`);
-			if (results == 1) {
-				console.log(`[ppePaymentRequest] Duplicated payment request found.`);
-				return true;
-			}
-			console.log(
-				`[ppePaymentRequest] No duplicated found for the current payment attempt.`,
-			);
-			return false;
-		})
-		.catch((error) => {
-			console.error(
-				`[ppePaymentRequest] Error checking duplicated payment: ${error}`,
-			);
-			return false;
-		});
-}
+// function checkDuplicatedPayment(amount, person_id, repertorie_id) {
+// 	//! Currently not working
+// 	pool
+// 		.query(
+// 			'SELECT EXISTS(SELECT folio from TransaccionTGR WHERE id_persona=$1 AND numero_repertorio=$2 AND monto=$3)',
+// 			[person_id, repertorie_id, amount],
+// 		)
+// 		.then((results) => {
+// 			console.log(`The result fields are:${results.fields}`);
+// 			console.log(`The rowCount is:${results.rowCount}`);
+// 			if (results == 1) {
+// 				console.log(`[ppePaymentRequest] Duplicated payment request found.`);
+// 				return true;
+// 			}
+// 			console.log(
+// 				`[ppePaymentRequest] No duplicated found for the current payment attempt.`,
+// 			);
+// 			return false;
+// 		})
+// 		.catch((error) => {
+// 			console.error(
+// 				`[ppePaymentRequest] Error checking duplicated payment: ${error}`,
+// 			);
+// 			return false;
+// 		});
+// }
 
 /**
  * @param {string} amount A given amount of money to check.
@@ -74,10 +74,11 @@ function checkEnteredAmount(amount) {
 
 /**
  * @param {string} id_persona A person ID to check.
- * @returns {boolean} Whether the given string matches the format of a RUN, RUT or passport ID.
+ * @returns {boolean} Whether the given string matches the format of a RUN, RUT or passport ID
+ * (case-sensitive).
  */
 function checkIdPersona(person_id) {
-	const runRegex = new RegExp('^[0-9]{7,8}-([0-9]|K)$'); // warning: case sensitive
+	const runRegex = new RegExp('^[0-9]{7,8}-([0-9]|K)$');
 	const passportRegex = new RegExp('^P[0-9]{7,8}$');
 	return runRegex.test(person_id) || passportRegex.test(person_id);
 }
@@ -86,11 +87,9 @@ function checkIdPersona(person_id) {
  * @param {string} repertorie_id A repertorie ID to check.
  * @returns {boolean} Whether the given string matches the repertorie ID format "YEAR-NUMBER" or not.
  */
-function checkRepertorieIdFormat(repertorie_id) {
-	const numericalRegex = new RegExp(
-		'^(18[0-9]{2}|19[0-9]{2}|200[0-9]|201[0-9]|202[0-1])-[0-9]{1,6}$',
-	);
-	return numericalRegex.test(repertorie_id);
+function checkRepertorieIdFormat(repertorie_id) { 
+	return new RegExp('^(18[0-9]{2}|19[0-9]{2}|200[0-9]|201[0-9]|202[0-1])-[0-9]{1,6}$')
+		.test(repertorie_id);
 }
 
 /**
@@ -114,19 +113,19 @@ function getRandomInt(min, max) {
  */
 async function tgrPaymentConfirmation(target_host, transaction_id) {
 	const target_url = `http://${target_host}:${TGR_PRENDAS_CONFIRMATION_PORT}/api/tgr_confirmation`;
-	// console.debug(`[tgrPaymentConfirmation] target_url=${target_url}`);
+	//// console.debug(`[tgrPaymentConfirmation] target_url=${target_url}`);
 
 	/**
 	 * Performs the confirmation API call itself.
 	 * @returns {boolean} Wether the response status is 200 OK or not.
 	 */
 	const prendasConfirmPaymentCall = async function () {
-		let callResult = await axios.post(target_url, {
+		let response = await axios.post(target_url, {
 			body: {
 				"transaction_id": transaction_id
 			}
 		});
-		return (callResult.status == 200);
+		return (response.status == 200);
 	};
 
 	/**
@@ -239,7 +238,7 @@ const ppePaymentRequest = (req, res = response) => {
 					[
 						id_persona.toUpperCase(),
 						numero_repertorio,
-						getCurrentServerTimestamp(),
+						getCurrentTimestamp(),
 						monto,
 						'ingresado',
 						true,
@@ -247,7 +246,7 @@ const ppePaymentRequest = (req, res = response) => {
 					],
 				)
 				.then((results) => {
-					console.log('[ppePaymentRequest] Monto Ingresado');
+					console.log(`[ppePaymentRequest] Successfull payment attempt (transaction ${paymentNewFolio}) for request ${req}`);
 					// console.debug(`[ppePaymentRequest] IP of request is ${req.headers['x-forwarded-for']} or ${req.connection.remoteAddress}`); Ref: https://codeforgeek.com/how-to-get-users-ip-details-in-express/
 					tgrPaymentConfirmation(confirmation_ip, paymentNewFolio); // invoking async confirmation task
 					res.status(200).json({
@@ -256,9 +255,7 @@ const ppePaymentRequest = (req, res = response) => {
 					});
 				})
 				.catch((error) => {
-					console.error(
-						`[ppePaymentRequest] Error for request ${req}: ${error}`,
-					);
+					console.error(`[ppePaymentRequest] Error for request ${req}: ${error}`);
 					res.status(500).json({
 						msg: 'Internal Server Error',
 						error: error.toString(),
@@ -274,24 +271,6 @@ const ppePaymentRequest = (req, res = response) => {
 		});
 };
 
-/**
- ** Won't be implemented, unless the client changes his mind.
- */
-// const ppeRefundRequest = (req, res = response) => {
-// 	const { persona_id, nro_repertorio, monto } = req.body;
-
-// 	if (!persona_id || !nro_repertorio || !monto) {
-// 		res.status(418).json({
-// 			msg: 'Missing data in the request body (persona_id , nro_repertorio, monto).',
-// 		});
-// 	}
-// 	...
-// 	res.status(200).json({
-// 		msg: `Refund state TODO`,
-// 	});
-// };
-
 module.exports = {
-	ppePaymentRequest,
-	//// ppeRefundRequest,
+	ppePaymentRequest
 };
