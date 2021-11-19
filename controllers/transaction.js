@@ -121,7 +121,9 @@ async function tgrPaymentConfirmation(target_host, transaction_id) {
 	 */
 	const prendasConfirmPaymentCall = async function () {
 		let response = await axios.post(target_url, {
-			transaction_id: transaction_id
+			body: {
+				"transaction_id": transaction_id
+			}
 		});
 		return (response.status == 200);
 	};
